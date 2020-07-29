@@ -38,12 +38,12 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
     # initialize triplet loss module
     cloud_embedder = initialize_cloud_embedder(args, params, device)
 
-    opt_flow, opt_loss_module, lr_update_flow, lr_update_loss = initialize_optimizers(params,
+    opt_flow, opt_cloud_embedder, lr_update_flow, lr_update_loss = initialize_optimizers(params,
                                                                                       flow_extractor,
                                                                                       cloud_embedder)
 
     skip_rate = 1  # 2
-    skip_rate_loss_module = 1
+    skip_rate_cloud_embedder = 1
 
     best_eval_epe = np.inf
     finish = False
@@ -74,7 +74,7 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
         acc_FE_sec = defaultdict(lambda: 0)
 
         counter_flow_extractor = 0
-        counter_loss_module = 0
+        counter_cloud_embedder = 0
 
         generator_sup = iter(dataloader_sup)
         generator_uns = iter(dataloader_uns)
@@ -108,8 +108,8 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
                 rate = 1.0
 
             # train loss module
-            if not (i % skip_rate_loss_module):
-                counter_loss_module += 1
+            if not (i % skip_rate_cloud_embedder):
+                counter_cloud_embedder += 1
 
                 # supervised trainnig
                 loss_sup, train_dict_sup = train_LM_sup(flow_extractor, cloud_embedder,
@@ -123,36 +123,36 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
                 loss_LM = loss_sup + loss_uns
 
                 # one step for both supervised and unsupervised training.
-                opt_loss_module.zero_grad()
+                opt_cloud_embedder.zero_grad()
                 loss_LM.backward()
                 torch.nn.utils.clip_grad_norm_(cloud_embedder.parameters(), max_norm=5.0)
-                opt_loss_module.step()
+                opt_cloud_embedder.step()
 
                 # keep stats
-                stats_LM["loss"] += (loss_LM.item() - stats_LM["loss"]) / counter_loss_module
-                stats_LM["loss_sup"] += (loss_sup.item() - stats_LM["loss_sup"]) / counter_loss_module
-                stats_LM["loss_uns"] += (loss_uns.item() - stats_LM["loss_uns"]) / counter_loss_module
+                stats_LM["loss"] += (loss_LM.item() - stats_LM["loss"]) / counter_cloud_embedder
+                stats_LM["loss_sup"] += (loss_sup.item() - stats_LM["loss_sup"]) / counter_cloud_embedder
+                stats_LM["loss_uns"] += (loss_uns.item() - stats_LM["loss_uns"]) / counter_cloud_embedder
 
-                stats_LM = update_running_mean(stats_LM, train_dict_sup["error"], counter_loss_module,
+                stats_LM = update_running_mean(stats_LM, train_dict_sup["error"], counter_cloud_embedder,
                                                pos_string="_sup")
-                stats_LM = update_running_mean(stats_LM, train_dict_uns["error"], counter_loss_module,
+                stats_LM = update_running_mean(stats_LM, train_dict_uns["error"], counter_cloud_embedder,
                                                pos_string="_uns")
-                acc_LM = update_running_mean(acc_LM, train_dict_sup["acc"], counter_loss_module, pos_string="_sup")
-                acc_LM = update_running_mean(acc_LM, train_dict_uns["acc"], counter_loss_module, pos_string="_uns")
+                acc_LM = update_running_mean(acc_LM, train_dict_sup["acc"], counter_cloud_embedder, pos_string="_sup")
+                acc_LM = update_running_mean(acc_LM, train_dict_uns["acc"], counter_cloud_embedder, pos_string="_uns")
 
                 common_errors = {}
                 for metric in train_dict_sup["error"].keys():
                     if metric in list(train_dict_sup["error"].keys()):
                         common_errors[metric + "_all"] = train_dict_uns["error"][metric] + train_dict_sup["error"][
                             metric]
-                stats_LM = update_running_mean(stats_LM, common_errors, counter_loss_module)
+                stats_LM = update_running_mean(stats_LM, common_errors, counter_cloud_embedder)
 
                 common_accs = {}
                 for metric in train_dict_sup["acc"].keys():
                     if metric in list(train_dict_sup["acc"].keys()):
                         common_accs[metric + "_all"] = train_dict_uns["acc"][metric] + train_dict_sup["acc"][metric]
 
-                acc_LM = update_running_mean(acc_LM, common_accs, counter_loss_module)
+                acc_LM = update_running_mean(acc_LM, common_accs, counter_cloud_embedder)
 
             # train flow extractor
             # gives the loss module some time to adjust to what is coming
@@ -259,13 +259,13 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
         print("train flow acc: ", acc_FE)
 
         # skip rate of the loss module
-        if acc_LM["all"] > args.skip_loss_module:
-            skip_rate_loss_module += int(acc_LM["all"] * 10)
+        if acc_LM["all"] > args.skip_cloud_embedder:
+            skip_rate_cloud_embedder += int(acc_LM["all"] * 10)
         else:
-            skip_rate_loss_module = max(1, skip_rate_loss_module // 2)
+            skip_rate_cloud_embedder = max(1, skip_rate_cloud_embedder // 2)
 
-        writer.add_scalars(main_tag="other/skip_loss_module",
-                           tag_scalar_dict={"skip_rate": skip_rate_loss_module},
+        writer.add_scalars(main_tag="other/skip_cloud_embedder",
+                           tag_scalar_dict={"skip_rate": skip_rate_cloud_embedder},
                            global_step=epoch)
 
         writer.add_scalars(main_tag="other/fade_factor",
@@ -279,7 +279,7 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
             dict_wraper = {"flow_extractor": flow_extractor.state_dict(),
                            "cloud_embedder": cloud_embedder.state_dict(),
                            "opt_flow": opt_flow.state_dict(),
-                           "opt_loss": opt_loss_module.state_dict(),
+                           "opt_loss": opt_cloud_embedder.state_dict(),
                            **stats_eval,
                            **stats_FE,
                            **acc_FE,
@@ -295,7 +295,7 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
         else:
             counter_bad_epochs += 1
 
-        if args.retrieve_old_loss_module and (counter_loss_module > 2 * params["lr_patience"]):
+        if args.retrieve_old_cloud_embedder and (counter_cloud_embedder > 2 * params["lr_patience"]):
             # retrieve the old loss module
             dict_wraper = torch.load(args.exp_name + "/model_best.pt")
             cloud_embedder.load_state_dict(dict_wraper["cloud_embedder"])
@@ -308,7 +308,7 @@ def train_semi_supervised(args, params, flow_extractor, dataloader_sup, dataload
 
         writer.add_scalars(main_tag="other/lr",
                            tag_scalar_dict={"flow": opt_flow.state_dict()["param_groups"][0]["lr"],
-                                            "cloud_embedder": opt_loss_module.state_dict()["param_groups"][0]["lr"]},
+                                            "cloud_embedder": opt_cloud_embedder.state_dict()["param_groups"][0]["lr"]},
                            global_step=epoch)
 
         if epoch > args.min_epochs:

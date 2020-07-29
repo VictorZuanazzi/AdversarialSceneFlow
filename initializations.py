@@ -17,63 +17,64 @@ from losses import inverse_triplet, triplet_divergence, triplet_margin, triplet_
 def initialize_cloud_embedder(args, params, device):
     """initialize the loss module accordingly to the choice of flow_extractor"""
     # initialize triplet loss module
-    if params["loss_module"] == "segdisc":
-        loss_module = PointNetFlowFeature2c(use_batch_norm=not args.no_BN,
+    if params["cloud_embedder"] == "segdisc":
+        cloud_embedder = PointNetFlowFeature2c(use_batch_norm=not args.no_BN,
                                             feat_dim=args.loss_feat_dim)
 
-    elif params["loss_module"] == "segfeat":
-        loss_module = PointNetFlowFeature(use_batch_norm=not args.no_BN,
+    elif params["cloud_embedder"] == "segfeat":
+        cloud_embedder = PointNetFlowFeature(use_batch_norm=not args.no_BN,
                                           feat_dim=args.loss_feat_dim)
 
-    elif params["loss_module"] == "fn3ddisc":
-        loss_module = FlowNet3DDiscriminatorP()
+    elif params["cloud_embedder"] == "fn3ddisc":
+        cloud_embedder = FlowNet3DDiscriminatorP()
 
-    elif params["loss_module"] == "fn3dfeat":
-        loss_module = FlowNet3DFeature(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3dfeat":
+        cloud_embedder = FlowNet3DFeature(feat_dim=args.loss_feat_dim,
                                        n_points=params["n_points"])
 
-    elif params["loss_module"] == "fn3dfeatcat":
-        loss_module = FlowNet3DFeatureCat(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3dfeatcat":
+        cloud_embedder = FlowNet3DFeatureCat(feat_dim=args.loss_feat_dim,
                                           n_points=params["n_points"])
 
-    elif params["loss_module"] == "fn3ddiscdiff":
-        loss_module = FlowNet3DiscriminatorDiff(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3ddiscdiff":
+        cloud_embedder = FlowNet3DiscriminatorDiff(feat_dim=args.loss_feat_dim,
                                                 n_points=params["n_points"])
 
-    elif params["loss_module"] == "fn3ddischcat":
-        loss_module = FlowNet3DiscriminatorHCat(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3ddischcat":
+        cloud_embedder = FlowNet3DiscriminatorHCat(feat_dim=args.loss_feat_dim,
                                                 n_points=params["n_points"])
 
-    elif params["loss_module"] == "fn3dfeatcat4l":
-        loss_module = FlowNet3DFeatureCat4l(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3dfeatcat4l":
+        cloud_embedder = FlowNet3DFeatureCat4l(feat_dim=args.loss_feat_dim,
                                             n_points=params["n_points"])
 
-    elif params["loss_module"] == "fn3dfeatcatfat":
-        loss_module = FlowNet3DFeatureCatFat(feat_dim=args.loss_feat_dim,
+    elif params["cloud_embedder"] == "fn3dfeatcatfat":
+        cloud_embedder = FlowNet3DFeatureCatFat(feat_dim=args.loss_feat_dim,
                                              n_points=params["n_points"])
 
     else:
         raise NotImplementedError
 
-    loss_module = nn.DataParallel(loss_module)
-    loss_module = loss_module.to(device)
+    cloud_embedder = nn.DataParallel(cloud_embedder)
+    cloud_embedder = cloud_embedder.to(device)
 
     if args.load_model:
         model_dict = torch.load(args.load_model)
-        if "loss_module" in model_dict.keys():
-            loss_module.load_state_dict(model_dict["loss_module"])
+        if "cloud_embedder" in model_dict.keys():
+            cloud_embedder.load_state_dict(model_dict["cloud_embedder"])
 
-    return loss_module
+    return cloud_embedder
 
 
-def initialize_optimizers(params, flow_extractor, loss_module=None):
+def initialize_optimizers(params, flow_extractor, cloud_embedder=None):
+    """Initialize optimizers as defined in """
     # initialize optimizers
     if params["opt"] == "sgd":
         opt_flow = optim.SGD(flow_extractor.parameters(), lr=params["lr"], momentum=0.9, weight_decay=1e-4)
-        opt_loss_module = optim.SGD(loss_module.parameters(), lr=params["lr_LM"], momentum=0.9, weight_decay=1e-4)
+        opt_cloud_embedder = optim.SGD(cloud_embedder.parameters(), lr=params["lr_LM"], momentum=0.9, weight_decay=1e-4)
     elif params["opt"] == "adam":
         opt_flow = optim.Adam(flow_extractor.parameters(), lr=params["lr"], betas=(0.0, 0.99), weight_decay=1e-4)
-        opt_loss_module = optim.Adam(loss_module.parameters(), lr=params["lr_LM"], betas=(0.0, 0.99), weight_decay=1e-4)
+        opt_cloud_embedder = optim.Adam(cloud_embedder.parameters(), lr=params["lr_LM"], betas=(0.0, 0.99), weight_decay=1e-4)
 
     class DumbScheduler:
         @staticmethod
@@ -87,12 +88,12 @@ def initialize_optimizers(params, flow_extractor, loss_module=None):
         lr_update_flow = DumbScheduler()
 
     if params["lr_patience_LM"] > 0:
-        lr_update_loss = ReduceLROnPlateau(optimizer=opt_loss_module, mode='min', factor=params["lr_factor"],
+        lr_update_loss = ReduceLROnPlateau(optimizer=opt_cloud_embedder, mode='min', factor=params["lr_factor"],
                                            patience=params["lr_patience_LM"], verbose=True, cooldown=0, min_lr=1e-6)
     else:
         lr_update_loss = DumbScheduler()
 
-    return opt_flow, opt_loss_module, lr_update_flow, lr_update_loss
+    return opt_flow, opt_cloud_embedder, lr_update_flow, lr_update_loss
 
 
 def initialize_flow_extractor_loss(loss_type, params):
@@ -124,12 +125,12 @@ def initialize_cloud_embedder_loss(loss_type, params):
     """"""
     # ### Losses for triplet learning:
     if "triplet" in loss_type:
-        loss_module_loss_func = nn.TripletMarginLoss(swap=True, p=params["norm_LM"], margin=params["margin"])
+        cloud_embedder_loss_func = nn.TripletMarginLoss(swap=True, p=params["norm_LM"], margin=params["margin"])
     elif loss_type == "js":
-        loss_module_loss_func = triplet_divergence(device=params["device"])
+        cloud_embedder_loss_func = triplet_divergence(device=params["device"])
     elif loss_type == "emb_dist":
-        loss_module_loss_func = triplet_norm_margin(norm=params["norm_LM"], margin=params["margin"])
+        cloud_embedder_loss_func = triplet_norm_margin(norm=params["norm_LM"], margin=params["margin"])
     elif loss_type == "dist":
-        loss_module_loss_func = triplet_margin(params["margin"])
+        cloud_embedder_loss_func = triplet_margin(params["margin"])
 
-    return loss_module_loss_func
+    return cloud_embedder_loss_func

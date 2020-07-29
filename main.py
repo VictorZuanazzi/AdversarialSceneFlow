@@ -397,7 +397,7 @@ if __name__ == '__main__':
     parser.add_argument("--deep_loss_scale", default="depth_sub", type=str,
                         choices=("shape", "shape_sub", "depth_sub", "depth_lin", "depth_sup", ""),
                         help="rescale the deep loss based on the depth or activation map size")
-    parser.add_argument("--retrieve_old_loss_module", default=False, action="store_true",
+    parser.add_argument("--retrieve_old_cloud_embedder", default=False, action="store_true",
                         help="retrieves old loss module if training is stuck.")
     parser.add_argument("--cycle_consistency", default="",
                         help="use cycle consistency loss to auxiliate training")
@@ -511,7 +511,7 @@ if __name__ == '__main__':
                              "default parameter and 0 to not use the lr scheduler")
     parser.add_argument("--freeze_rotation", action="store_true", default=False,
                         help="freeze rotation of toy datasets, only rigid translation is applied")
-    parser.add_argument("--skip_loss_module", type=float, default=1.0,
+    parser.add_argument("--skip_cloud_embedder", type=float, default=1.0,
                         help="skip the training of the loss module when the accuracy drops bellow the given treshold")
 
     args = parser.parse_args()

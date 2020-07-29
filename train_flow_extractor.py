@@ -45,19 +45,19 @@ def train_step_flow_extractor(args, params, use_flow_signal=False, supervised=Fa
     elif params["cycle_consistency_sup"] is not None:
         cycons_func = cycons_func_(params["cycle_consistency_sup"])
 
-    def train_step_FE_func_uns(flow_extractor, loss_module, c1, c2, flow_t1=None):
+    def train_step_FE_func_uns(flow_extractor, cloud_embedder, c1, c2, flow_t1=None):
         # train the flow extractor
         flow_extractor.train()
-        loss_module.eval()
+        cloud_embedder.eval()
 
         flow_pred = flow_extractor(c1, c2)
         c2_pred = c1 + flow_pred
 
         c1_, c_anchor, c_negative, c_positive = select_inputs(c1, c2, c2_pred, flow_t1)
 
-        f_0, hidden_feats_0 = loss_module(c1_, c_anchor)
-        f_p, hidden_feats_p = loss_module(c1_, c_positive)
-        f_n, hidden_feats_n = loss_module(c1_, c_negative)
+        f_0, hidden_feats_0 = cloud_embedder(c1_, c_anchor)
+        f_p, hidden_feats_p = cloud_embedder(c1_, c_positive)
+        f_n, hidden_feats_n = cloud_embedder(c1_, c_negative)
 
         loss_hidden_feats = deep_loss(hidden_feats_0, hidden_feats_p, hidden_feats_n)
         loss_feat = loss_func_shallow(f_0, f_p, f_n)

@@ -27,18 +27,18 @@ def train_step_cloud_embedder(args, params, use_flow_signal=False, n_points=None
     # initializes how to parse the input of the loss module
     select_inputs = select_inputs_(use_flow_signal, n_points)
 
-    def train_step_func(flow_extractor, loss_module, c1, c2, flow_t1=None):
+    def train_step_func(flow_extractor, cloud_embedder, c1, c2, flow_t1=None):
         flow_extractor.eval()
-        loss_module.train()
+        cloud_embedder.train()
 
         flow_pred = flow_extractor(c1, c2)
         c2_pred = c1 + flow_pred
 
         c1_, c_anchor, c_positive, c_negative = select_inputs(c1, c2, c2_pred, flow_t1)
 
-        f_0, hidden_feats_0 = loss_module(c1_, c_anchor)
-        f_p, hidden_feats_p = loss_module(c1_, c_positive)
-        f_n, hidden_feats_n = loss_module(c1_, c_negative)
+        f_0, hidden_feats_0 = cloud_embedder(c1_, c_anchor)
+        f_p, hidden_feats_p = cloud_embedder(c1_, c_positive)
+        f_n, hidden_feats_n = cloud_embedder(c1_, c_negative)
 
         loss_hidden_feats = deep_loss(hidden_feats_0, hidden_feats_p, hidden_feats_n)
 

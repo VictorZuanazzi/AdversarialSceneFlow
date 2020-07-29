@@ -36,8 +36,8 @@ def eval_triplet(args, params, flow_extractor, cloud_embedder, dataloader_eval, 
 
     # initialize the cloud embedder losses
     if cloud_embedder is not None:
-        loss_func_loss_module_shallow = initialize_cloud_embedder_loss(args.loss_type, params=params)
-        loss_func_loss_module_deep = initialize_cloud_embedder_loss(loss_type=params["loss_type_deep"], params=params)
+        loss_func_cloud_embedder_shallow = initialize_cloud_embedder_loss(args.loss_type, params=params)
+        loss_func_cloud_embedder_deep = initialize_cloud_embedder_loss(loss_type=params["loss_type_deep"], params=params)
 
     # odd and even indeces
     i_odds = torch.arange(start=1, end=n_points, step=2)
@@ -96,7 +96,7 @@ def eval_triplet(args, params, flow_extractor, cloud_embedder, dataloader_eval, 
                 loss_hidden_feats = 0
                 B = fs_0.shape[0]
                 for hf0, hfp, hfn in zip(hiddens_feats_0, hiddens_feats_p, hiddens_feats_n):
-                    loss_hidden_feats += loss_func_loss_module_deep(hf0.view(B, -1), hfp.view(B, -1), hfn.view(B, -1))
+                    loss_hidden_feats += loss_func_cloud_embedder_deep(hf0.view(B, -1), hfp.view(B, -1), hfn.view(B, -1))
 
                 if len(fs_0.shape) > 2:
                     N = fs_0.shape[1]
@@ -104,15 +104,15 @@ def eval_triplet(args, params, flow_extractor, cloud_embedder, dataloader_eval, 
                     fs_p = fs_p.transpose(1, -1).reshape(-1, N)
                     fs_n = fs_n.transpose(1, -1).reshape(-1, N)
 
-                loss_feat = loss_func_loss_module_shallow(fs_0, fs_p, fs_n)
-                loss_module_supervised = loss_feat + loss_hidden_feats
+                loss_feat = loss_func_cloud_embedder_shallow(fs_0, fs_p, fs_n)
+                cloud_embedder_supervised = loss_feat + loss_hidden_feats
 
                 stats_LM["sup_feat"] += (loss_feat.item()
                                          - stats_LM["sup_feat"]) / counter
                 stats_LM["sup_hidden"] += (loss_hidden_feats.item()
                                            - stats_LM["sup_hidden"]) / counter
 
-                loss_module_supervised_acc = (
+                cloud_embedder_supervised_acc = (
                         (fs_0 - fs_p).norm(dim=-1) < (fs_0 - fs_n).norm(dim=-1)).float().mean().item()
 
                 fu_0, hiddenu_feats_0 = cloud_embedder(c1[:, :, i_odds], c2[:, :, i_odds])
@@ -122,7 +122,7 @@ def eval_triplet(args, params, flow_extractor, cloud_embedder, dataloader_eval, 
                 loss_hidden_feats = 0
                 B = fu_0.shape[0]
                 for hf0, hfp, hfn in zip(hiddenu_feats_0, hiddenu_feats_p, hiddenu_feats_n):
-                    loss_hidden_feats += loss_func_loss_module_deep(hf0.view(B, -1), hfp.view(B, -1), hfn.view(B, -1))
+                    loss_hidden_feats += loss_func_cloud_embedder_deep(hf0.view(B, -1), hfp.view(B, -1), hfn.view(B, -1))
 
                 if len(fu_0.shape) > 2:
                     N = fu_0.shape[1]
@@ -130,26 +130,26 @@ def eval_triplet(args, params, flow_extractor, cloud_embedder, dataloader_eval, 
                     fu_p = fu_p.transpose(1, -1).reshape(-1, N)
                     fu_n = fu_n.transpose(1, -1).reshape(-1, N)
 
-                loss_feat = loss_func_loss_module_shallow(fu_0, fu_p, fu_n)
-                loss_module_unsupervised = loss_feat + loss_hidden_feats
+                loss_feat = loss_func_cloud_embedder_shallow(fu_0, fu_p, fu_n)
+                cloud_embedder_unsupervised = loss_feat + loss_hidden_feats
 
                 stats_LM["uns_feat"] += (loss_feat.item()
                                          - stats_LM["uns_feat"]) / counter
                 stats_LM["uns_hidden"] += (loss_hidden_feats.item()
                                            - stats_LM["uns_hidden"]) / counter
-                loss_module_unsupervised_acc = (
+                cloud_embedder_unsupervised_acc = (
                         (fu_0 - fu_p).norm(dim=-1) < (fu_0 - fu_n).norm(dim=-1)).float().mean().item()
 
-                stats_LM["supervised"] += (loss_module_supervised.item()
+                stats_LM["supervised"] += (cloud_embedder_supervised.item()
                                            - stats_LM["supervised"]) / counter
 
-                stats_LM["unsupervised"] += (loss_module_unsupervised.item()
+                stats_LM["unsupervised"] += (cloud_embedder_unsupervised.item()
                                              - stats_LM["unsupervised"]) / counter
 
-                acc_LM["supervised_acc"] += (loss_module_supervised_acc
+                acc_LM["supervised_acc"] += (cloud_embedder_supervised_acc
                                              - acc_LM["supervised_acc"]) / counter
 
-                acc_LM["unsupervised_acc"] += (loss_module_unsupervised_acc
+                acc_LM["unsupervised_acc"] += (cloud_embedder_unsupervised_acc
                                                - acc_LM["unsupervised_acc"]) / counter
 
             if args.overfit:
@@ -226,12 +226,12 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
     # initialize triplet loss module
     cloud_embedder = initialize_cloud_embedder(args, params, device)
 
-    opt_flow, opt_loss_module, lr_update_flow, lr_update_loss = initialize_optimizers(params,
+    opt_flow, opt_cloud_embedder, lr_update_flow, lr_update_loss = initialize_optimizers(params,
                                                                                       flow_extractor,
                                                                                       cloud_embedder)
 
     skip_rate = 1  # 2
-    skip_rate_loss_module = 1
+    skip_rate_cloud_embedder = 1
 
     best_eval_epe = np.inf
     finish = False
@@ -251,7 +251,7 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
         acc_FE = defaultdict(lambda: 0)
 
         counter_flow_extractor = 0
-        counter_loss_module = 0
+        counter_cloud_embedder = 0
         for i, (clouds, extra_dict) in enumerate(tqdm(dataloader_train, desc=f'{epoch}) Train')):
 
             clouds = clouds.float().to(device)
@@ -266,9 +266,9 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
             c2 = clouds[:, :, n_points: 2 * n_points].contiguous()
 
             # Train Cloud Embedder
-            if not (i % skip_rate_loss_module):
-                counter_loss_module += 1
-                opt_loss_module.zero_grad()
+            if not (i % skip_rate_cloud_embedder):
+                counter_cloud_embedder += 1
+                opt_cloud_embedder.zero_grad()
 
                 loss_LM, train_dict = train_LM(flow_extractor,
                                                cloud_embedder,
@@ -280,15 +280,15 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
                                                cloud_embedder,
                                                c2, c1)
                     loss_LM += loss_reverse
-                    stats_LM["rev"] += (loss_reverse.item() - stats_LM["rev"]) / counter_loss_module
+                    stats_LM["rev"] += (loss_reverse.item() - stats_LM["rev"]) / counter_cloud_embedder
 
                 loss_LM.backward()
                 torch.nn.utils.clip_grad_norm_(cloud_embedder.parameters(), max_norm=5.0)
-                opt_loss_module.step()
+                opt_cloud_embedder.step()
 
-                stats_LM["loss"] += (loss_LM.item() - stats_LM["loss"]) / counter_loss_module
-                acc_LM = update_running_mean(acc_LM, train_dict["acc"], counter=counter_loss_module)
-                stats_LM = update_running_mean(stats_LM, train_dict["error"], counter=counter_loss_module)
+                stats_LM["loss"] += (loss_LM.item() - stats_LM["loss"]) / counter_cloud_embedder
+                acc_LM = update_running_mean(acc_LM, train_dict["acc"], counter=counter_cloud_embedder)
+                stats_LM = update_running_mean(stats_LM, train_dict["error"], counter=counter_cloud_embedder)
 
             # gives the loss module some time to adjust to what is coming
             if i % skip_rate:
@@ -329,13 +329,13 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
         print("train flow acc: ", acc_FE)
 
         # skip rate of the loss module
-        if acc_LM["acc"] > args.skip_loss_module:
-            skip_rate_loss_module += int(acc_LM["acc"] * 10)
+        if acc_LM["acc"] > args.skip_cloud_embedder:
+            skip_rate_cloud_embedder += int(acc_LM["acc"] * 10)
         else:
-            skip_rate_loss_module = max(1, skip_rate_loss_module // 2)
+            skip_rate_cloud_embedder = max(1, skip_rate_cloud_embedder // 2)
 
-        writer.add_scalars(main_tag="other/skip_loss_module",
-                           tag_scalar_dict={"skip_rate": skip_rate_loss_module},
+        writer.add_scalars(main_tag="other/skip_cloud_embedder",
+                           tag_scalar_dict={"skip_rate": skip_rate_cloud_embedder},
                            global_step=epoch)
 
         # save best model
@@ -345,7 +345,7 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
             dict_wraper = {"flow_extractor": flow_extractor.state_dict(),
                            "cloud_embedder": cloud_embedder.state_dict(),
                            "opt_flow": opt_flow.state_dict(),
-                           "opt_loss": opt_loss_module.state_dict(),
+                           "opt_loss": opt_cloud_embedder.state_dict(),
                            **stats_eval,
                            **stats_FE,
                            **acc_FE,
@@ -361,7 +361,7 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
         else:
             counter_bad_epochs += 1
 
-        if args.retrieve_old_loss_module and (counter_loss_module > 2 * params["lr_patience"]):
+        if args.retrieve_old_cloud_embedder and (counter_cloud_embedder > 2 * params["lr_patience"]):
             # retrieve the old loss module
             dict_wraper = torch.load(args.exp_name + "/model_best.pt")
             cloud_embedder.load_state_dict(dict_wraper["cloud_embedder"])
@@ -374,7 +374,7 @@ def train_triplet(args, params, flow_extractor, dataloader_train, dataloader_eva
 
         writer.add_scalars(main_tag="other/lr",
                            tag_scalar_dict={"flow": opt_flow.state_dict()["param_groups"][0]["lr"],
-                                            "cloud_embedder": opt_loss_module.state_dict()["param_groups"][0]["lr"]},
+                                            "cloud_embedder": opt_cloud_embedder.state_dict()["param_groups"][0]["lr"]},
                            global_step=epoch)
 
         if epoch > args.min_epochs:
