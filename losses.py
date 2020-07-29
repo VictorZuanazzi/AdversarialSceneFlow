@@ -22,8 +22,8 @@ def inverse_triplet(dim=1, norm=2, max_margin=1.0):
         """implements inverse triplet margin, with dynamic margin.
         input:
             anchor: torch.tensor(B, Z), the anchor of the triplet.
-            anchor: torch.tensor(B, Z), the positive example.
-            anchor: torch.tensor(B, Z), the negative example.
+            positive: torch.tensor(B, Z), the positive example.
+            negative: torch.tensor(B, Z), the negative example.
         return:
             triplet distance, torch.tensor(B)"""
 
@@ -53,20 +53,6 @@ def l_inv_loss(dim=1, norm=2, pow=2, eps=1e-3):
 
     return loss_func
 
-
-def triplet_norm_margin(dim=1, norm=2, margin=1):
-    relu = nn.ReLU()
-    def func(x, y, _):
-        return (relu(-(x - y).norm(dim=dim, p=norm) + margin)).mean()
-    return func
-
-
-def triplet_margin(margin=1):
-    relu = nn.ReLU()
-    def func(x, y, _):
-        return (relu(x - y + margin)).mean()
-
-    return func
 
 def cycons_func_(cycle_type):
     """cycle consistency loss
@@ -199,7 +185,7 @@ def local_flow_consistency(pc1, flow_pred, n_samples=4, radius=0.0125):
 
 
 def knn_loss(pc_pred, pc_target, n_samples=1, radius=1.0):
-    """k-nearest neighbor loss"""
+    """1-nearest neighbor loss"""
 
     B, D, N1 = pc_pred.shape
     N2 = pc_target.shape[-1]
@@ -237,7 +223,7 @@ def chamfer_distance(pc_pred, pc_target):
 
 
 def laplacian_regularization(pc_pred, pc_target, treshold=0.0125):
-    """as discribed in PointPWC paper"""
+    """As discribed in PointPWC paper"""
     B, D, N1 = pc_pred.shape
     N2 = pc_target.shape[-1]
     pc_pred_e = pc_pred.unsqueeze(-1).expand(B, D, N1, N2)
@@ -257,6 +243,5 @@ def laplacian_regularization(pc_pred, pc_target, treshold=0.0125):
     lt = (pc_pred_target_diff * mask_target.unsqueeze(1)).sum(dim=-1) / mask_target.sum(dim=-2, keepdim=True).clamp(
         min=1)
     laplace_error = (lp - lt).norm(dim=1).sum(dim=-1)
-    # laplace_error = (lp - lt).norm(dim=1).mean(dim=-1)
 
     return laplace_error.mean()
