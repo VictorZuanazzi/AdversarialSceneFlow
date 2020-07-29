@@ -67,7 +67,7 @@ def initialize_cloud_embedder(args, params, device):
 
 
 def initialize_optimizers(params, flow_extractor, cloud_embedder=None):
-    """Initialize optimizers as defined in """
+    """Initialize optimizers as defined in params"""
     # initialize optimizers
     if params["opt"] == "sgd":
         opt_flow = optim.SGD(flow_extractor.parameters(), lr=params["lr"], momentum=0.9, weight_decay=1e-4)
@@ -97,7 +97,7 @@ def initialize_optimizers(params, flow_extractor, cloud_embedder=None):
 
 
 def initialize_flow_extractor_loss(loss_type, params):
-    # ### Losses for triplet adversarial training.
+    """Initialize the tripled loss"""
     # whole point cloud mapped to one vector
     if loss_type == "triplet_l":
         # the fastest to run, usually gets the best results and is more stable.
@@ -113,16 +113,12 @@ def initialize_flow_extractor_loss(loss_type, params):
         flow_extractor_loss_func = nn.TripletMarginLoss(swap=True, p=params["norm_FE"])
     elif loss_type == "js":
         flow_extractor_loss_func = triplet_divergence(device=params["device"], triplet=False)
-    elif loss_type == "dist":
-        flow_extractor_loss_func = lambda x, y, z: x.mean()
-    elif loss_type == "emb_dist":
-        flow_extractor_loss_func = lambda p, t, _: (p - t).norm(dim=1, p=params["norm_FE"]).mean()
 
     return flow_extractor_loss_func
 
 
 def initialize_cloud_embedder_loss(loss_type, params):
-    """"""
+    """Initialize the loss used to train the cloud embedder"""
     # ### Losses for triplet learning:
     if "triplet" in loss_type:
         cloud_embedder_loss_func = nn.TripletMarginLoss(swap=True, p=params["norm_LM"], margin=params["margin"])
