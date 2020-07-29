@@ -257,19 +257,9 @@ def magic_colors(img_cloud):
 
 
 def plot_2d_clouds(dataset, args, clouds, flow_target, tokens, cloud_pred, flow_pred, dot_size):
-    # TODO(5): clean this function
     """ Plot point clouds in the XY projection in a way that makes it more intuitive to understand what is happening.
-    Code dump!
-    :param flow_pred:
-    :param flow_target:
-    :param dataset:
-    :param args:
-    :param clouds:
-    :param tokens:
-    :param cloud_pred:
-    :param dot_size:
-    :return: plt.figure
     """
+    # TODO: document this function
 
     # For qualitative analysis, save images with one sample.
     fig, axs = plt.subplots(2, args.n_sweeps + 1,
@@ -278,9 +268,6 @@ def plot_2d_clouds(dataset, args, clouds, flow_target, tokens, cloud_pred, flow_
     ref_cloud = None
     flow = None
     dot_size = 1.0
-
-    # if tokens is None:
-    #     tokens = torch.zeros_like(flow_pred)
 
     for a in range(args.n_sweeps + 1):
         if a < args.n_sweeps:
@@ -333,7 +320,8 @@ def plot_2d_clouds(dataset, args, clouds, flow_target, tokens, cloud_pred, flow_
 
 
 def plot_3d_clouds(dataset, args, clouds, flow_target, tokens, cloud_pred, flow_pred, dot_size):
-    # For qualitative analysis, save images with one sample.
+    """For qualitative analysis, save images with one sample. """
+    # TODO: document this function
 
     plot_shape = [2, args.n_sweeps + 1]
     fig, axs = plt.subplots(plot_shape[0], plot_shape[1],
@@ -403,20 +391,6 @@ def plot_3d_clouds(dataset, args, clouds, flow_target, tokens, cloud_pred, flow_
     return fig
 
 
-def plot_from_dict(dict, save_dir, title="Losses"):
-    # TODO(5): Make this plot look professional (seaborn)
-    fig, ax = plt.subplots(figsize=(12, 4))
-    for key in dict.keys():
-        ax.plot(dict[key], label=key)
-
-    ax.legend()
-    ax.set_title(label=title)
-    ax.set_ylabel("Loss")
-    ax.set_xlabel("Step")
-    fig.tight_layout()
-    plt.savefig(save_dir + title)
-
-
 # ################### Others ################### #
 def make_rotation_matrix(angle, stretch):
     """make a rotation matrix given the angle
@@ -443,10 +417,14 @@ def make_rotation_matrix(angle, stretch):
 
 
 def divide_input_target(clouds, n_points):
-    """"""
-    # make explicit the distinction between input and target point clouds.
-    # at least 2 point clouds must be used for flow extraction.
-    # If only 2 point clouds are given, then the 2nd one is also used as target.
+    """
+    Make explicit the distinction between input and target point clouds. At least 2 point clouds must be used for flow
+    extraction. If only 2 point clouds are given, then the 2nd one is also used as target.
+    Input:
+        clouds: torch.tensor(B, C, n_points * n_sweeps), tensor containing consecutive point clouds.
+        n_point: int, number of points per sweep
+    Return:
+        point cloud to input the model, point cloud to be used as target"""
     n_sweeps = clouds.shape[2] // n_points
     if n_sweeps > 2:
         input_idx = (n_sweeps - 1) * n_points
@@ -491,7 +469,10 @@ def random_idxs(input_size, output_size, with_replacement=False):
 def select_inputs_(use_flow_signal, n_points, half_cloud=True):
     """creates a function that selects the input given to the loss module given depending if flow signal is to be
     used or not.
-    input: bool
+    input:
+        use_flow_signal: bool, defines if ground truth flow will be used (True) or not (False)
+        n_point: int, number of points per sweep
+        half_cloud: bool, defines if clouds are subsampled (True) or not (False)
     return: function"""
     # if use signal is on, then the c1 + flow is used as positive example, otherwise c2 is used.
     if use_flow_signal:
